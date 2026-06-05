@@ -4,7 +4,7 @@
  * from a photographed answer sheet.
  */
 
-import { getBubblePositions, SHEET_TEMPLATE } from './template.js';
+import { getBubblePositions, SHEET_TEMPLATE, getQuestionType } from './template.js';
 
 // ---------------------------------------------------------------------------
 // Maximum width used when down-scaling large images for processing
@@ -13,7 +13,7 @@ const MAX_PROCESSING_WIDTH = 1200;
 
 // Fill-ratio threshold: a bubble is considered "filled" when the ratio of
 // dark pixels to total pixels in its ROI exceeds this value.
-const FILL_THRESHOLD = 0.35;
+const FILL_THRESHOLD = 0.45;
 
 // ---------------------------------------------------------------------------
 // OpenCV readiness helpers
@@ -423,7 +423,20 @@ export function mapToAnswers(bubbleReadings) {
 
   for (let q = 1; q <= totalQuestions; q++) {
     const bubbles = groups[q] || [];
-    const selected = bubbles.filter((b) => b.isFilled).map((b) => b.option);
+    const qType = getQuestionType(q);
+    
+    let selected = [];
+    if (qType === 'pg') {
+      // Find the bubble with the maximum fillRatio that is also considered filled
+      const filledBubbles = bubbles.filter((b) => b.isFilled);
+      if (filledBubbles.length > 0) {
+        filledBubbles.sort((a, b) => b.fillRatio - a.fillRatio);
+        selected = [filledBubbles[0].option];
+      }
+    } else {
+      // PGK or other types allow multiple selections
+      selected = bubbles.filter((b) => b.isFilled).map((b) => b.option);
+    }
 
     answers.push({
       number: q,
