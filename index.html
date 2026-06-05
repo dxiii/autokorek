@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="AutoKorek - Aplikasi koreksi lembar jawaban siswa otomatis menggunakan kamera. Mendukung Pilihan Ganda dan Pilihan Ganda Kompleks.">
+  <meta name="theme-color" content="#060b18">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>AutoKorek — Koreksi Lembar Jawaban Otomatis</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- OpenCV Loading Bar -->
+  <div class="opencv-loading" id="opencv-loading">
+    <div class="bar"></div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="spinner"></div>
+    <div class="loading-text" id="loading-text">Memproses lembar jawaban...</div>
+    <div class="loading-subtext" id="loading-subtext">Mendeteksi jawaban siswa</div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
+
+  <!-- Modal Backdrop -->
+  <div class="modal-backdrop" id="modal-backdrop"></div>
+
+  <!-- Main App -->
+  <div id="app">
+
+    <!-- ============ HEADER ============ -->
+    <header class="app-header" id="app-header">
+      <div class="logo">AutoKorek</div>
+      <div class="subtitle">Koreksi Lembar Jawaban Otomatis</div>
+    </header>
+
+    <!-- ============ PAGE: DASHBOARD ============ -->
+    <div class="page active" id="page-dashboard" data-page="dashboard">
+
+      <!-- Stats Grid -->
+      <div class="stats-grid" id="stats-grid">
+        <div class="card stat-card">
+          <div class="stat-value" id="stat-total-scan">0</div>
+          <div class="stat-label">Total Scan</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-value" id="stat-avg-score">—</div>
+          <div class="stat-label">Rata-rata</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-value" id="stat-highest">—</div>
+          <div class="stat-label">Tertinggi</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-value" id="stat-lowest">—</div>
+          <div class="stat-label">Terendah</div>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="quick-actions">
+        <div class="card quick-action-card" id="qa-scan" tabindex="0" role="button">
+          <span class="qa-icon">📸</span>
+          <div class="qa-title">Mulai Scan</div>
+          <div class="qa-desc">Koreksi lembar jawaban</div>
+        </div>
+        <div class="card quick-action-card" id="qa-keys" tabindex="0" role="button">
+          <span class="qa-icon">🔑</span>
+          <div class="qa-title">Kunci Jawaban</div>
+          <div class="qa-desc">Kelola kunci jawaban</div>
+        </div>
+      </div>
+
+      <!-- Recent Results -->
+      <div class="card" id="recent-results-card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Hasil Terbaru</div>
+            <div class="card-subtitle">Koreksi terakhir</div>
+          </div>
+          <button class="btn btn-ghost" id="btn-view-all-results">Lihat Semua →</button>
+        </div>
+        <div id="recent-results-list">
+          <div class="empty-state">
+            <div class="empty-icon">📋</div>
+            <div class="empty-title">Belum ada hasil</div>
+            <div class="empty-desc">Mulai scan lembar jawaban untuk melihat hasil koreksi</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ PAGE: SCANNER ============ -->
+    <div class="page" id="page-scan" data-page="scan">
+      <div class="page-title"><span class="icon">📸</span> Scan Jawaban</div>
+
+      <!-- Step Indicator -->
+      <div class="step-indicator" id="scan-steps">
+        <div class="step-dot active" data-step="1"></div>
+        <div class="step-dot" data-step="2"></div>
+        <div class="step-dot" data-step="3"></div>
+        <div class="step-dot" data-step="4"></div>
+      </div>
+
+      <!-- STEP 1: Select Answer Key -->
+      <div class="scan-step active" id="scan-step-1" data-step="1">
+        <div class="card">
+          <div class="card-title mb-md">Pilih Kunci Jawaban</div>
+          <div class="form-group">
+            <label class="form-label" for="scan-key-select">Kunci Jawaban</label>
+            <select class="form-select" id="scan-key-select">
+              <option value="">— Pilih Kunci Jawaban —</option>
+            </select>
+          </div>
+          <div id="scan-key-preview" class="hidden mt-md"></div>
+          <button class="btn btn-primary btn-block btn-lg mt-lg" id="btn-start-camera" disabled>
+            📸 Buka Kamera
+          </button>
+          <div class="separator">atau</div>
+          <div class="upload-area" id="upload-area">
+            <div class="upload-icon">📁</div>
+            <div class="upload-text">Upload foto lembar jawaban</div>
+            <input type="file" accept="image/*" id="file-input" capture="environment">
+          </div>
+          <p class="text-center mt-md">
+            <a href="#" id="link-create-key" class="text-accent">+ Buat Kunci Jawaban Baru</a>
+          </p>
+        </div>
+      </div>
+
+      <!-- STEP 2: Camera Capture -->
+      <div class="scan-step" id="scan-step-2" data-step="2">
+        <div class="scanner-container" id="scanner-container">
+          <video id="camera-video" autoplay playsinline muted></video>
+          <canvas id="camera-canvas"></canvas>
+          <div class="scanner-overlay">
+            <div class="scanner-guide">
+              <div class="corner corner-tl"></div>
+              <div class="corner corner-tr"></div>
+              <div class="corner corner-br"></div>
+              <div class="corner corner-bl"></div>
+            </div>
+          </div>
+          <div class="scanner-hint">Arahkan kamera ke lembar jawaban</div>
+        </div>
+        <div class="scanner-controls">
+          <button class="scanner-action-btn" id="btn-flash" title="Flash">
+            ⚡
+          </button>
+          <button class="scan-btn" id="btn-capture" title="Ambil Gambar">
+            📸
+          </button>
+          <button class="scanner-action-btn" id="btn-switch-cam" title="Ganti Kamera">
+            🔄
+          </button>
+        </div>
+        <button class="btn btn-ghost btn-block" id="btn-back-step1">← Kembali</button>
+      </div>
+
+      <!-- STEP 3: Review & Edit Detected Answers -->
+      <div class="scan-step" id="scan-step-3" data-step="3">
+        <div class="card mb-md">
+          <div class="card-title mb-md">Hasil Deteksi</div>
+
+          <!-- Captured Image Preview -->
+          <div class="captured-preview" id="captured-preview">
+            <canvas id="result-canvas"></canvas>
+          </div>
+
+          <div class="flex-between mb-md">
+            <span class="badge badge-accent" id="detection-status">Otomatis</span>
+            <button class="btn btn-ghost" id="btn-retake">📸 Ambil Ulang</button>
+          </div>
+        </div>
+
+        <!-- Student Name -->
+        <div class="card mb-md">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="student-name">Nama Siswa</label>
+            <input type="text" class="form-input" id="student-name" placeholder="Masukkan nama siswa...">
+          </div>
+        </div>
+
+        <!-- Detected Answers Editor -->
+        <div class="card mb-md">
+          <div class="card-header">
+            <div class="card-title">Jawaban Terdeteksi</div>
+            <span class="text-muted text-mono" style="font-size: var(--text-xs);">Ketuk bubble untuk edit</span>
+          </div>
+
+          <!-- PG Section -->
+          <div class="answer-grid-section">
+            <div class="section-title">
+              Pilihan Ganda <span class="badge">No. 1–15</span>
+            </div>
+            <div id="detected-pg-grid">
+              <!-- Generated by JS -->
+            </div>
+          </div>
+
+          <!-- PGK Section -->
+          <div class="answer-grid-section mt-lg">
+            <div class="section-title">
+              PG Kompleks <span class="badge">No. 16–30</span>
+            </div>
+            <div id="detected-pgk-grid">
+              <!-- Generated by JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Uraian Scores -->
+        <div class="card mb-md">
+          <div class="card-title mb-md">Skor Uraian (Input Manual)</div>
+          <div class="uraian-grid" id="uraian-grid">
+            <!-- Generated by JS -->
+          </div>
+        </div>
+
+        <div class="btn-group">
+          <button class="btn btn-secondary" id="btn-back-step2" style="flex:1">← Kembali</button>
+          <button class="btn btn-primary btn-lg" id="btn-grade" style="flex:2">
+            ✅ Koreksi & Simpan
+          </button>
+        </div>
+      </div>
+
+      <!-- STEP 4: Score Result -->
+      <div class="scan-step" id="scan-step-4" data-step="4">
+        <div class="card">
+          <!-- Score Circle -->
+          <div class="score-display">
+            <div class="score-circle" id="score-circle">
+              <svg viewBox="0 0 140 140">
+                <defs>
+                  <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#00e5ff" />
+                    <stop offset="100%" stop-color="#7c4dff" />
+                  </linearGradient>
+                </defs>
+                <circle class="track" cx="70" cy="70" r="65" />
+                <circle class="fill" id="score-fill" cx="70" cy="70" r="65" />
+              </svg>
+              <div class="score-text">
+                <div class="score-value" id="score-value">0</div>
+                <div class="score-label">SKOR</div>
+              </div>
+            </div>
+
+            <h3 id="result-student-name" style="margin-bottom: 4px;">—</h3>
+            <p class="text-muted" id="result-key-name">—</p>
+          </div>
+
+          <!-- Score Breakdown -->
+          <div class="score-breakdown">
+            <div class="score-breakdown-item">
+              <div class="breakdown-value" id="breakdown-pg">0</div>
+              <div class="breakdown-label">PG</div>
+              <div class="breakdown-max">/ 15</div>
+            </div>
+            <div class="score-breakdown-item">
+              <div class="breakdown-value" id="breakdown-pgk">0</div>
+              <div class="breakdown-label">PGK</div>
+              <div class="breakdown-max">/ 60</div>
+            </div>
+            <div class="score-breakdown-item">
+              <div class="breakdown-value" id="breakdown-uraian">0</div>
+              <div class="breakdown-label">Uraian</div>
+              <div class="breakdown-max">/ 25</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="card mt-md">
+          <div class="flex-between mb-sm">
+            <span class="text-muted">PG Benar</span>
+            <span class="text-mono" id="result-pg-correct">0 / 15</span>
+          </div>
+          <div class="flex-between mb-sm">
+            <span class="text-muted">PG Salah</span>
+            <span class="text-mono text-error" id="result-pg-wrong">0</span>
+          </div>
+          <div class="flex-between mb-sm">
+            <span class="text-muted">PG Kosong</span>
+            <span class="text-mono" id="result-pg-blank">0</span>
+          </div>
+          <div class="flex-between">
+            <span class="text-muted">PGK Skor</span>
+            <span class="text-mono" id="result-pgk-score">0 / 60</span>
+          </div>
+        </div>
+
+        <!-- Detail per question -->
+        <div class="card mt-md">
+          <div class="card-header">
+            <div class="card-title">Detail Jawaban</div>
+          </div>
+          <div class="detail-questions" id="result-detail-questions">
+            <!-- Generated by JS -->
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="btn-group mt-lg">
+          <button class="btn btn-primary btn-lg btn-block" id="btn-scan-another">
+            📸 Scan Berikutnya
+          </button>
+        </div>
+        <button class="btn btn-ghost btn-block mt-sm" id="btn-go-dashboard">← Kembali ke Dashboard</button>
+      </div>
+    </div>
+
+    <!-- ============ PAGE: ANSWER KEYS ============ -->
+    <div class="page" id="page-keys" data-page="keys">
+      <div class="flex-between mb-lg">
+        <div class="page-title" style="margin-bottom:0"><span class="icon">🔑</span> Kunci Jawaban</div>
+        <button class="btn btn-primary" id="btn-new-key">+ Baru</button>
+      </div>
+
+      <div id="keys-list">
+        <div class="empty-state">
+          <div class="empty-icon">🔑</div>
+          <div class="empty-title">Belum ada kunci jawaban</div>
+          <div class="empty-desc">Buat kunci jawaban baru untuk mulai mengoreksi</div>
+          <button class="btn btn-primary" id="btn-new-key-empty">+ Buat Kunci Jawaban</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ PAGE: RESULTS ============ -->
+    <div class="page" id="page-results" data-page="results">
+      <div class="flex-between mb-lg">
+        <div class="page-title" style="margin-bottom:0"><span class="icon">📊</span> Hasil Koreksi</div>
+        <div class="btn-group">
+          <button class="btn btn-secondary" id="btn-export-csv" title="Export CSV">📥 CSV</button>
+          <button class="btn btn-danger" id="btn-clear-results" title="Hapus Semua">🗑️</button>
+        </div>
+      </div>
+
+      <!-- Filter by Key -->
+      <div class="form-group">
+        <select class="form-select" id="results-filter-key">
+          <option value="">Semua Kunci Jawaban</option>
+        </select>
+      </div>
+
+      <!-- Results Summary -->
+      <div class="stats-grid mb-md" id="results-stats" style="display:none;">
+        <div class="card stat-card">
+          <div class="stat-value" id="rstat-count">0</div>
+          <div class="stat-label">Siswa</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-value" id="rstat-avg">—</div>
+          <div class="stat-label">Rata-rata</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-value" id="rstat-max">—</div>
+          <div class="stat-label">Tertinggi</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-value" id="rstat-min">—</div>
+          <div class="stat-label">Terendah</div>
+        </div>
+      </div>
+
+      <div id="results-list">
+        <div class="empty-state">
+          <div class="empty-icon">📊</div>
+          <div class="empty-title">Belum ada hasil</div>
+          <div class="empty-desc">Scan lembar jawaban untuk mulai mengoreksi</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ BOTTOM NAVIGATION ============ -->
+    <nav class="bottom-nav" id="bottom-nav">
+      <a href="#dashboard" class="nav-item active" data-page="dashboard" id="nav-dashboard">
+        <span class="nav-icon">🏠</span>
+        <span class="nav-label">Beranda</span>
+      </a>
+      <a href="#scan" class="nav-item" data-page="scan" id="nav-scan">
+        <span class="nav-icon">📸</span>
+        <span class="nav-label">Scan</span>
+      </a>
+      <a href="#keys" class="nav-item" data-page="keys" id="nav-keys">
+        <span class="nav-icon">🔑</span>
+        <span class="nav-label">Kunci</span>
+      </a>
+      <a href="#results" class="nav-item" data-page="results" id="nav-results">
+        <span class="nav-icon">📊</span>
+        <span class="nav-label">Hasil</span>
+      </a>
+    </nav>
+  </div>
+
+  <!-- ============ MODAL: Answer Key Editor ============ -->
+  <div class="modal" id="modal-key-editor">
+    <div class="modal-header">
+      <h3 class="modal-title" id="key-editor-title">Kunci Jawaban Baru</h3>
+      <button class="modal-close" id="btn-close-key-editor">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="key-subject-name">Nama / Mata Pelajaran</label>
+        <input type="text" class="form-input" id="key-subject-name" placeholder="cth: Matematika - Kelas 6">
+      </div>
+
+      <!-- PG Section (1-15) -->
+      <div class="answer-grid-section">
+        <div class="section-title">
+          Pilihan Ganda <span class="badge">Skor: 1 per soal</span>
+        </div>
+        <div id="key-pg-grid">
+          <!-- Generated by JS -->
+        </div>
+      </div>
+
+      <!-- PGK Section (16-30) -->
+      <div class="answer-grid-section mt-lg">
+        <div class="section-title">
+          PG Kompleks <span class="badge">Skor: maks 4 per soal</span>
+        </div>
+        <div id="key-pgk-grid">
+          <!-- Generated by JS -->
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="btn-cancel-key" style="flex:1">Batal</button>
+      <button class="btn btn-primary" id="btn-save-key" style="flex:2">💾 Simpan</button>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: Result Detail ============ -->
+  <div class="modal" id="modal-result-detail">
+    <div class="modal-header">
+      <h3 class="modal-title" id="detail-modal-title">Detail Hasil</h3>
+      <button class="modal-close" id="btn-close-detail">✕</button>
+    </div>
+    <div class="modal-body" id="detail-modal-body">
+      <!-- Populated by JS -->
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="btn-delete-result" style="flex:1">🗑️ Hapus</button>
+      <button class="btn btn-secondary" id="btn-close-detail-footer" style="flex:2">Tutup</button>
+    </div>
+  </div>
+
+  <!-- SVG Gradient Definition (for score circle) -->
+  <svg width="0" height="0" style="position:absolute">
+    <defs>
+      <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#00e5ff" />
+        <stop offset="100%" stop-color="#7c4dff" />
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <!-- OpenCV.js (loaded async) -->
+  <script async
+    src="https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.12.0-release.1/dist/opencv.js"
+    onload="window._opencvLoaded = true;"
+    type="text/javascript"></script>
+
+  <!-- Application Scripts (ES Modules) -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
